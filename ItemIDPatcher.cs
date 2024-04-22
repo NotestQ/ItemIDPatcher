@@ -8,9 +8,9 @@ using System.IO;
 using System.Linq;
 using BepInEx;
 using Cecilifier.Runtime;
-using System.Reflection;
-using System.Net;
 using System.Data;
+using System.Reflection;
+using System.Net.Http;
 
 namespace ItemIDPatcher
 {
@@ -22,6 +22,7 @@ namespace ItemIDPatcher
         public static void Patch(AssemblyDefinition assembly)
         {
             // Patcher code here
+            // TODO: Switch loops that only want to modify one thing to something normal, like an if statement
             foreach (TypeDefinition type in assembly.MainModule.Types)
             {
                 switch (type.Name)
@@ -31,17 +32,15 @@ namespace ItemIDPatcher
                         {
                             if (field.Name == "id")
                             {
-                                //Console.WriteLine(field.FieldType);
-                                //field.FieldType = assembly.MainModule.TypeSystem.Int32;
-                                //Console.WriteLine(field.FieldType);
+                                field.FieldType = assembly.MainModule.TypeSystem.Int32;
                             }
                         }
                         break;
                     case "ShopHandler":
                         var shopItemDefintion = assembly.MainModule.Types.Single(t => t.Name == "ShopItem");
                         var shopItemReference = assembly.MainModule.ImportReference(shopItemDefintion);
-                        Type shopItem = Type.GetType(shopItemReference.FullName + ", " + shopItemReference.Module.Assembly.FullName); // Getting the ShopItem struct as a Type like this currently makes the game blue
-
+                        
+                        assembly.MainModule.GetType();
                         foreach (FieldDefinition field in type.Fields)
                         {
                             if (field.Name == "m_ItemsForSaleDictionary")
@@ -59,16 +58,19 @@ namespace ItemIDPatcher
                                 property.GetMethod.Body.Instructions.Clear();
 
                                 var fieldItemsForSale = type.Fields.Single(f => f.Name == "m_ItemsForSaleDictionary");
-
-                                var countMethod = typeof(Enumerable).GetMethods()
+                                
+                                var countMethodReference = assembly.MainModule.ImportReference(
+                                    typeof(Enumerable).GetMethods()
                                     .Where(m => m.Name == "Count")
-                                    .FirstOrDefault(m => m.GetParameters().Length == 1);
+                                    .FirstOrDefault(m => m.GetParameters().Length == 1));
 
-                                var genericMethod = assembly.MainModule.ImportReference(countMethod.MakeGenericMethod(new Type[] { typeof(System.Collections.Generic.KeyValuePair<,>).MakeGenericType(new Type[] { typeof(System.Int32), Type.GetType(shopItemReference.FullName + ", " + shopItemReference.Module.Assembly.FullName) }) }));
+                                var countMethodGenericInstance = new GenericInstanceMethod(countMethodReference);
+                                countMethodGenericInstance.GenericArguments.Add(assembly.MainModule.TypeSystem.Int32);
+                                countMethodGenericInstance.GenericArguments.Add(shopItemReference);
 
                                 getMethodIL.Emit(OpCodes.Ldarg_0);
                                 getMethodIL.Emit(OpCodes.Ldfld, fieldItemsForSale);
-                                getMethodIL.Emit(OpCodes.Callvirt, genericMethod);
+                                getMethodIL.Emit(OpCodes.Callvirt, countMethodGenericInstance);
                                 getMethodIL.Emit(OpCodes.Ret);
                             }
                         }
@@ -80,20 +82,76 @@ namespace ItemIDPatcher
                                 case "InitShop":
                                     var body = method.Body;
                                     var methodILProcessor = body.GetILProcessor();
-                                    
-                                    foreach (Instruction instruction in body.Instructions.Where(t => t.OpCode == OpCodes.Newobj))
-                                    {
-                                        Console.WriteLine(instruction.Operand.ToString());
-                                        if (instruction.Operand.ToString() == "System.Void System.Collections.Generic.Dictionary`2<System.Byte,ShopItem>::.ctor()") {
-                                            Console.WriteLine("Operand found");
-                                            var obj = assembly.MainModule.ImportReference(TypeHelpers.ResolveMethod(typeof(System.Collections.Generic.Dictionary<,>).MakeGenericType(new Type[] { typeof(System.Int32), shopItem }), ".ctor", System.Reflection.BindingFlags.Default | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public));
-                                            // I used Cecilifier because I don't want to make the object myself :bluecookieemoji:
-                                            methodILProcessor.Replace(instruction, 
-                                                methodILProcessor.Create(OpCodes.Newobj, obj));
-                                            break;
-                                        }
+                                    var instruction = body.Instructions.First(t => t.OpCode == OpCodes.Newobj && t.Operand.ToString() == "System.Void System.Collections.Generic.Dictionary`2<System.Byte,ShopItem>::.ctor()");
 
-                                    };
+                                    if (instruction == null) break;
+
+                                    var dictionaryTypeDefinition = assembly.MainModule.ImportReference(typeof(Dictionary<,>));
+                                    var constructorMethodReference = assembly.MainModule.ImportReference(
+                                        typeof(Dictionary<,>).GetConstructors()
+                                        .FirstOrDefault(m => m.GetParameters().Length == 0));
+                                    var constructorMethodDefinition = constructorMethodReference.Resolve();
+
+                                    constructorMethodReference = new MethodReference(constructorMethodDefinition.Name, constructorMethodDefinition.ReturnType) 
+                                        { HasThis = constructorMethodDefinition.HasThis, ExplicitThis = constructorMethodDefinition.ExplicitThis, 
+                                        DeclaringType = dictionaryTypeDefinition.MakeGenericInstanceType(assembly.MainModule.TypeSystem.Int32, shopItemReference), 
+                                        CallingConvention = constructorMethodDefinition.CallingConvention};
+
+                                    methodILProcessor.Replace(instruction, 
+                                        methodILProcessor.Create(OpCodes.Newobj, constructorMethodReference));
+                                    break;
+                                case "OnAddToCartItemClicked":
+                                    method.Parameters[0].ParameterType = assembly.MainModule.TypeSystem.Int32;
+                                    break;
+                                case "OnChangeCategoryClicked":
+                                    method.Parameters[0].ParameterType = assembly.MainModule.TypeSystem.Int32;
+                                    break;
+                                case "RPCM_RequestShop":
+                                    var requestShopBody = method.Body;
+                                    var requestShopILProcessor = requestShopBody.GetILProcessor();
+                                    
+                                    var newArrInstr = requestShopBody.Instructions.First(i => i.OpCode == OpCodes.Newarr);
+
+                                    requestShopBody.Variables[0].VariableType = assembly.MainModule.TypeSystem.Int32;
+                                    requestShopILProcessor.Replace(newArrInstr,
+                                        requestShopILProcessor.Create(OpCodes.Newarr, assembly.MainModule.TypeSystem.Int32));
+                                    // TODO: Change LinQ Select and ToArray
+                                    break;
+                                case "RPCO_UpdateShop":
+                                    method.Parameters[1].ParameterType = assembly.MainModule.TypeSystem.Int32.MakeArrayType();
+                                    break;
+                                case "ResetCart":
+                                    method.Parameters[0].ParameterType = assembly.MainModule.TypeSystem.Int32.MakeArrayType();
+
+                                    var resetCartBody = method.Body;
+                                    var resetCartILProcessor = resetCartBody.GetILProcessor();
+
+                                    resetCartBody.Variables[0].VariableType = assembly.MainModule.TypeSystem.Int32.MakeArrayType();
+                                    resetCartBody.Variables[2].VariableType = assembly.MainModule.TypeSystem.Int32;
+
+                                    // TODO: Replace call's arguments
+                                    var addItemToCartInstanceMethod = new GenericInstanceMethod(assembly.MainModule.ImportReference(
+                                        type.GetMethods()
+                                         .First(m => m.Name == "RPCA_AddItemToCart")));
+                                    addItemToCartInstanceMethod.GenericArguments.Add(assembly.MainModule.TypeSystem.Int32);
+
+                                    var callInstr = resetCartBody.Instructions.First(i => i.OpCode == OpCodes.Call);
+                                    resetCartILProcessor.Replace(callInstr, 
+                                        resetCartILProcessor.Create(OpCodes.Call, addItemToCartInstanceMethod));
+                                    break;
+                            }
+                        }
+                        break;
+                    case "ItemInstanceData":
+                        foreach (MethodDefinition method in type.Methods)
+                        {
+                            switch (method.Name)
+                            {
+                                case "GetEntryIdentifier":
+                                    method.ReturnType = assembly.MainModule.TypeSystem.Int32;
+                                    break;
+                                case "GetEntryType":
+                                    method.Parameters[0].ParameterType = assembly.MainModule.TypeSystem.Int32;
                                     break;
                             }
                         }
