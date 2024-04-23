@@ -27,6 +27,37 @@ namespace ItemIDPatcher
             {
                 switch (type.Name)
                 {
+                    case "ShopInteractibleItem": // [sic]
+                        foreach (FieldDefinition field in type.Fields)
+                        {
+                            /*if (field.Name == "<ItemID>k__BackingField")
+                            {
+                                field.FieldType = assembly.MainModule.TypeSystem.Int32;
+                            }*/
+                        }
+                        foreach (PropertyDefinition property in type.Properties)
+                        {
+                            if (property.Name == "ItemID")
+                            {
+                                property.PropertyType = assembly.MainModule.TypeSystem.Int32;
+                            }
+                        }
+                        break;
+                    case "ShopItem":
+                        foreach (PropertyDefinition property in type.Properties)
+                        {
+                            if (property.Name == "ItemID")
+                            {
+                                // TODO: This converts to byte still, for some reason
+                                property.PropertyType = assembly.MainModule.TypeSystem.Int32;
+                                var propertyBody = property.GetMethod.Body;
+                                var propertyBodyILProcessor = propertyBody.GetILProcessor();
+
+                                propertyBodyILProcessor.InsertAfter(propertyBody.Instructions.Last(),
+                                    propertyBodyILProcessor.Create(OpCodes.Conv_I4));
+                            }
+                        }
+                        break;
                     case "Item":
                         foreach (FieldDefinition field in type.Fields)
                         {
@@ -37,6 +68,7 @@ namespace ItemIDPatcher
                         }
                         break;
                     case "ShopHandler":
+
                         var shopItemDefintion = assembly.MainModule.Types.Single(t => t.Name == "ShopItem");
                         var shopItemReference = assembly.MainModule.ImportReference(shopItemDefintion);
                         
@@ -74,7 +106,43 @@ namespace ItemIDPatcher
                                 getMethodIL.Emit(OpCodes.Ret);
                             }
                         }
-                        
+
+                        /*foreach (var nestedType in type.NestedTypes) Commented out for the time being because I hope the issue goes away by itself
+                        {
+                            if (nestedType.Name == "<>c")
+                            {
+                                // TODO: Change method b__41_0, b__31_0 return type (and instructions, maybe?)
+                                foreach (FieldDefinition field in nestedType.Fields)
+                                {
+                                    Console.WriteLine(field.Name);
+                                    switch (field.Name) 
+                                    {
+                                        case "<>9__31_0":
+                                        case "<>9__41_0":
+                                            field.FieldType = assembly.MainModule.ImportReference(typeof(System.Func<,>)).MakeGenericInstanceType(assembly.MainModule.TypeSystem.Int32, shopItemDefintion);
+                                            break;
+                                    }
+                                }
+
+                                foreach (MethodDefinition method in nestedType.Methods)
+                                {
+                                    Console.WriteLine(method.Name);
+                                    switch (method.Name)
+                                    {
+                                        case "<RPCM_RequestShop>b__31_0": 
+                                        case "<BuyItem>b__41_0":
+                                            
+                                            /*foreach (Instruction instr in method.Body.Instructions) // call System.Byte ShopItem::get_ItemID(); ret
+                                            {
+                                                Console.WriteLine($"{instr.OpCode} {instr.Operand}");
+                                            }
+                                            method.ReturnType = assembly.MainModule.TypeSystem.Int32;
+                                            break;
+                                    }
+                                }
+                            }
+                        }*/
+
                         foreach (MethodDefinition method in type.Methods)
                         {
                             switch (method.Name)
@@ -103,9 +171,6 @@ namespace ItemIDPatcher
                                 case "OnAddToCartItemClicked":
                                     method.Parameters[0].ParameterType = assembly.MainModule.TypeSystem.Int32;
                                     break;
-                                case "OnChangeCategoryClicked":
-                                    method.Parameters[0].ParameterType = assembly.MainModule.TypeSystem.Int32;
-                                    break;
                                 case "RPCM_RequestShop":
                                     var requestShopBody = method.Body;
                                     var requestShopILProcessor = requestShopBody.GetILProcessor();
@@ -115,7 +180,40 @@ namespace ItemIDPatcher
                                     requestShopBody.Variables[0].VariableType = assembly.MainModule.TypeSystem.Int32;
                                     requestShopILProcessor.Replace(newArrInstr,
                                         requestShopILProcessor.Create(OpCodes.Newarr, assembly.MainModule.TypeSystem.Int32));
-                                    // TODO: Change LinQ Select and ToArray
+
+                                    var requestShopSelectCallInstruction = requestShopBody.Instructions.FirstOrDefault(i => i.OpCode != null
+                                    && i.OpCode == OpCodes.Stsfld
+                                    && i.Next.OpCode == OpCodes.Call
+                                    && i.Next.Next.OpCode == OpCodes.Call).Next;
+                                    var requestShopToArrayCallInstruction = requestShopSelectCallInstruction.Next;
+
+                                    if (requestShopSelectCallInstruction != null)
+                                    {
+                                        var selectMethodReference = assembly.MainModule.ImportReference(
+                                            typeof(Enumerable).GetMethods()
+                                            .Where(m => m.Name == "Select")
+                                            .FirstOrDefault(m => m.GetParameters().Length == 2));
+
+                                        var selectMethodGenericInstance = new GenericInstanceMethod(selectMethodReference);
+                                        selectMethodGenericInstance.GenericArguments.Add(shopItemReference);
+                                        selectMethodGenericInstance.GenericArguments.Add(assembly.MainModule.TypeSystem.Int32);
+
+                                        requestShopILProcessor.Replace(requestShopSelectCallInstruction,
+                                            requestShopILProcessor.Create(OpCodes.Call, selectMethodGenericInstance));
+                                    }
+
+                                    if (requestShopToArrayCallInstruction != null)
+                                    {
+                                        var toArrayMethodReference = assembly.MainModule.ImportReference(
+                                            typeof(Enumerable).GetMethods()
+                                            .FirstOrDefault(m => m.Name == "ToArray"));
+                                        var toArrayMethodGenericInstance = new GenericInstanceMethod(toArrayMethodReference);
+                                        toArrayMethodGenericInstance.GenericArguments.Add(assembly.MainModule.TypeSystem.Int32);
+
+                                        requestShopILProcessor.Replace(requestShopToArrayCallInstruction,
+                                                requestShopILProcessor.Create(OpCodes.Call, toArrayMethodGenericInstance));
+                                    }
+                                    // TODO?: Change stfld and stuff still using uint8?
                                     break;
                                 case "RPCO_UpdateShop":
                                     method.Parameters[1].ParameterType = assembly.MainModule.TypeSystem.Int32.MakeArrayType();
@@ -128,16 +226,83 @@ namespace ItemIDPatcher
 
                                     resetCartBody.Variables[0].VariableType = assembly.MainModule.TypeSystem.Int32.MakeArrayType();
                                     resetCartBody.Variables[2].VariableType = assembly.MainModule.TypeSystem.Int32;
+                                    
+                                    break;
+                                case "RPCA_AddItemToCart":
+                                    method.Parameters[0].ParameterType = assembly.MainModule.TypeSystem.Int32;
 
-                                    // TODO: Replace call's arguments
-                                    var addItemToCartInstanceMethod = new GenericInstanceMethod(assembly.MainModule.ImportReference(
-                                        type.GetMethods()
-                                         .First(m => m.Name == "RPCA_AddItemToCart")));
-                                    addItemToCartInstanceMethod.GenericArguments.Add(assembly.MainModule.TypeSystem.Int32);
+                                    /*var addToCartBody = method.Body;
+                                    var addToCartILProcessor = addToCartBody.GetILProcessor();
 
-                                    var callInstr = resetCartBody.Instructions.First(i => i.OpCode == OpCodes.Call);
-                                    resetCartILProcessor.Replace(callInstr, 
-                                        resetCartILProcessor.Create(OpCodes.Call, addItemToCartInstanceMethod));
+                                    foreach (Instruction instr in addToCartBody.Instructions)
+                                    {
+                                        Console.WriteLine(instr.OpCode);
+                                        //addToCartILProcessor.Replace(instr,
+                                         //   addToCartILProcessor.Create(OpCodes.Box, assembly.MainModule.TypeSystem.Int32));
+                                    }*/
+                                    break;
+                                case "RPCM_RequestShopAction":
+                                    method.Parameters[1].ParameterType = assembly.MainModule.TypeSystem.Int32;
+                                    break;
+                                case "TryGetShopItem":
+                                    method.Parameters[0].ParameterType = assembly.MainModule.TypeSystem.Int32;
+                                    break;
+                                case "BuyItem":
+                                    if (method.Parameters.Count == 1) // Overload where the only parameter is ShoppingCart cart
+                                    {
+                                        var buyItemBody = method.Body;
+                                        var buyItemILProcessor = buyItemBody.GetILProcessor();
+
+                                        buyItemBody.Variables[1].VariableType = assembly.MainModule.TypeSystem.Int32.MakeArrayType(); // stloc 1
+                                        //Patch line 38 and 39 call
+                                        /*string selectOperand = "System.Collections.Generic.IEnumerable`1 < !!1 > System.Linq.Enumerable::Select<ShopItem, System.Byte>(System.Collections.Generic.IEnumerable`1 < !!0 >, System.Func`2 < !!0, !!1 >)";
+                                        string toArrayOperand = "!!0[] System.Linq.Enumerable::ToArray<System.Byte>(System.Collections.Generic.IEnumerable`1 < !!0 >)";*/
+                                        var selectCallInstruction = buyItemBody.Instructions.FirstOrDefault(i => i.OpCode != null
+                                        //&& i.Operand != null 
+                                        && i.OpCode == OpCodes.Call
+                                        //&& i.Operand.ToString() == selectOperand);
+                                        && i.Previous.OpCode == OpCodes.Stsfld
+                                        && i.Next.OpCode == OpCodes.Call);
+                                        /*var toArrayCallInstruction = buyItemBody.Instructions.FirstOrDefault(i => i.OpCode != null 
+                                        && i.Operand != null 
+                                        && i.OpCode == OpCodes.Call 
+                                        && i.Operand.ToString() == toArrayOperand);*/
+                                        var toArrayCallInstruction = selectCallInstruction.Next;
+
+                                        if (selectCallInstruction != null)
+                                        {
+                                            var selectMethodReference = assembly.MainModule.ImportReference(
+                                                typeof(Enumerable).GetMethods()
+                                                .Where(m => m.Name == "Select")
+                                                .FirstOrDefault(m => m.GetParameters().Length == 2));
+
+                                            var selectMethodGenericInstance = new GenericInstanceMethod(selectMethodReference);
+                                            selectMethodGenericInstance.GenericArguments.Add(shopItemReference);
+                                            selectMethodGenericInstance.GenericArguments.Add(assembly.MainModule.TypeSystem.Int32);
+
+                                            buyItemILProcessor.Replace(selectCallInstruction, 
+                                                buyItemILProcessor.Create(OpCodes.Call, selectMethodGenericInstance));
+                                        }
+
+                                        if (toArrayCallInstruction != null)
+                                        {
+                                            var toArrayMethodReference = assembly.MainModule.ImportReference(
+                                                typeof(Enumerable).GetMethods()
+                                                .FirstOrDefault(m => m.Name == "ToArray"));
+                                            var toArrayMethodGenericInstance = new GenericInstanceMethod(toArrayMethodReference);
+                                            toArrayMethodGenericInstance.GenericArguments.Add(assembly.MainModule.TypeSystem.Int32);
+                                            //var newToArrayCall = assembly.MainModule.ImportReference(TypeHelpers.ResolveGenericMethodInstance(typeof(System.Linq.Enumerable).AssemblyQualifiedName, "ToArray", System.Reflection.BindingFlags.Default | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public, new ParamData[] { }, new[] { typeof(System.Int32).AssemblyQualifiedName }));
+                                            buyItemILProcessor.Replace(toArrayCallInstruction,
+                                                    buyItemILProcessor.Create(OpCodes.Call, toArrayMethodGenericInstance));
+                                        }
+                                        // TODO?: Change line 37 stsfld, 35 newobj, 29 ldsfld ??
+                                        break;
+                                    }
+
+                                    method.Parameters[1].ParameterType = assembly.MainModule.TypeSystem.Int32.MakeArrayType();
+                                    break;
+                                case "RPCA_SpawnDrone":
+                                    method.Parameters[0].ParameterType = assembly.MainModule.TypeSystem.Int32.MakeArrayType();
                                     break;
                             }
                         }
@@ -156,6 +321,18 @@ namespace ItemIDPatcher
                             }
                         }
                         break;
+                    case "ItemDatabase":
+                        foreach (MethodDefinition method in type.Methods)
+                        {
+                            switch (method.Name)
+                            {
+                                case "TryGetItemFromID":
+                                    method.Parameters[0].ParameterType = assembly.MainModule.TypeSystem.Int32;
+                                    break;
+                            }
+                        }
+                        break;
+                        // TODO: PlayerInventory, PickupHandler, Every serializer and deserializer that uses IDs *shudders* (only if we want to touch base game item IDs), Player RPC_RequestCreatePickupVel | RequestCreatePickup, PlayerEmoteContentEvent?, PlayerEmotes?,   
                 }
             }
 
