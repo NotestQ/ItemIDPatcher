@@ -28,12 +28,14 @@ namespace ItemIDPatcher
                 switch (type.Name)
                 {
                     case "ShopInteractibleItem": // [sic]
+                        // TODO: This converts to byte still, for some reason
+                        // I assume it's because *something* that uses it still expects a byte, blegh-
                         foreach (FieldDefinition field in type.Fields)
                         {
-                            /*if (field.Name == "<ItemID>k__BackingField")
+                            if (field.Name == "<ItemID>k__BackingField")
                             {
                                 field.FieldType = assembly.MainModule.TypeSystem.Int32;
-                            }*/
+                            }
                         }
                         foreach (PropertyDefinition property in type.Properties)
                         {
@@ -48,7 +50,6 @@ namespace ItemIDPatcher
                         {
                             if (property.Name == "ItemID")
                             {
-                                // TODO: This converts to byte still, for some reason
                                 property.PropertyType = assembly.MainModule.TypeSystem.Int32;
                                 var propertyBody = property.GetMethod.Body;
                                 var propertyBodyILProcessor = propertyBody.GetILProcessor();
@@ -150,9 +151,9 @@ namespace ItemIDPatcher
                                 case "InitShop":
                                     var body = method.Body;
                                     var methodILProcessor = body.GetILProcessor();
-                                    var instruction = body.Instructions.First(t => t.OpCode == OpCodes.Newobj && t.Operand.ToString() == "System.Void System.Collections.Generic.Dictionary`2<System.Byte,ShopItem>::.ctor()");
+                                    var newObjInstruction = body.Instructions.First(t => t.OpCode == OpCodes.Newobj && t.Operand.ToString() == "System.Void System.Collections.Generic.Dictionary`2<System.Byte,ShopItem>::.ctor()");
 
-                                    if (instruction == null) break;
+                                    if (newObjInstruction == null) break;
 
                                     var dictionaryTypeDefinition = assembly.MainModule.ImportReference(typeof(Dictionary<,>));
                                     var constructorMethodReference = assembly.MainModule.ImportReference(
@@ -161,12 +162,40 @@ namespace ItemIDPatcher
                                     var constructorMethodDefinition = constructorMethodReference.Resolve();
 
                                     constructorMethodReference = new MethodReference(constructorMethodDefinition.Name, constructorMethodDefinition.ReturnType) 
-                                        { HasThis = constructorMethodDefinition.HasThis, ExplicitThis = constructorMethodDefinition.ExplicitThis, 
+                                    { 
+                                        HasThis = constructorMethodDefinition.HasThis, ExplicitThis = constructorMethodDefinition.ExplicitThis, 
                                         DeclaringType = dictionaryTypeDefinition.MakeGenericInstanceType(assembly.MainModule.TypeSystem.Int32, shopItemReference), 
-                                        CallingConvention = constructorMethodDefinition.CallingConvention};
+                                        CallingConvention = constructorMethodDefinition.CallingConvention
+                                    };
 
-                                    methodILProcessor.Replace(instruction, 
+                                    methodILProcessor.Replace(newObjInstruction, 
                                         methodILProcessor.Create(OpCodes.Newobj, constructorMethodReference));
+
+                                    //callVirt patch
+
+                                    var callVirtInstruction = body.Instructions.First(t => t.OpCode == OpCodes.Callvirt );
+                                    Console.WriteLine(callVirtInstruction.Operand);
+                                    
+                                    if (callVirtInstruction == null) break;
+
+                                    var dictionaryAddMethodReference = assembly.MainModule.ImportReference(
+                                        typeof(Dictionary<,>).GetMethods()
+                                        .FirstOrDefault(m => m.Name == "Add" && m.GetParameters().Length == 2));
+                                    var dictionaryAddMethodDefinition = dictionaryAddMethodReference.Resolve();
+
+                                    dictionaryAddMethodReference = new MethodReference(dictionaryAddMethodDefinition.Name, dictionaryAddMethodDefinition.ReturnType)
+                                    {
+                                        HasThis = dictionaryAddMethodDefinition.HasThis,
+                                        ExplicitThis = dictionaryAddMethodDefinition.ExplicitThis,
+                                        DeclaringType = dictionaryTypeDefinition.MakeGenericInstanceType(assembly.MainModule.TypeSystem.Int32, shopItemReference),
+                                        CallingConvention = dictionaryAddMethodDefinition.CallingConvention
+                                    };
+                                    Console.WriteLine(methodILProcessor.Create(OpCodes.Callvirt, dictionaryAddMethodReference).Operand);
+
+                                    break;
+                                    // TODO: Invalid stack size decompilation error
+                                    methodILProcessor.Replace(callVirtInstruction,
+                                       methodILProcessor.Create(OpCodes.Callvirt, dictionaryAddMethodReference));
                                     break;
                                 case "OnAddToCartItemClicked":
                                     method.Parameters[0].ParameterType = assembly.MainModule.TypeSystem.Int32;
@@ -332,7 +361,7 @@ namespace ItemIDPatcher
                             }
                         }
                         break;
-                        // TODO: PlayerInventory, PickupHandler, Every serializer and deserializer that uses IDs *shudders* (only if we want to touch base game item IDs), Player RPC_RequestCreatePickupVel | RequestCreatePickup, PlayerEmoteContentEvent?, PlayerEmotes?,   
+                        // TODO: PlayerInventory, PickupHandler, Pickup, Every serializer and deserializer that uses IDs *shudders* (only if we want to touch base game item IDs), Player RPC_RequestCreatePickupVel | RequestCreatePickup, PlayerEmoteContentEvent?, PlayerEmotes?,   
                 }
             }
 
