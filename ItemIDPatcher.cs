@@ -340,7 +340,60 @@ namespace ItemIDPatcher
                             }
                         }
                         break;
-                        // TODO: PlayerInventory, PickupHandler, Pickup, Every serializer and deserializer that uses IDs *shudders* (only if we want to touch base game item IDs), Player RPC_RequestCreatePickupVel | RequestCreatePickup, PlayerEmoteContentEvent?, PlayerEmotes?,   
+                    case "Pickup":
+                        foreach (FieldDefinition field in type.Fields)
+                        {
+                            if (field.Name == "m_itemID")
+                            {
+                                field.FieldType = assembly.MainModule.TypeSystem.Int32;
+                            }
+                        }
+
+                        foreach (MethodDefinition method in type.Methods)
+                        {
+                            switch (method.Name)
+                            {
+                                case "RPC_ConfigurePickup":
+                                case "ConfigurePickup":
+                                    method.Parameters[0].ParameterType = assembly.MainModule.TypeSystem.Int32;
+                                    break;
+                            }
+                        }
+                        break;
+                    case "PickupHandler":
+                        foreach (MethodDefinition method in type.Methods)
+                        {
+                            switch (method.Name)
+                            {
+                                case "CreatePickup":
+                                    method.Parameters[0].ParameterType = assembly.MainModule.TypeSystem.Int32;
+                                    break;
+                            }
+                        }
+                        break;
+                    case "PlayerInventory":
+                        foreach (MethodDefinition method in type.Methods)
+                        {
+                            switch (method.Name)
+                            {
+                                case "RPC_AddToSlot":
+                                    method.Parameters[1].ParameterType = assembly.MainModule.TypeSystem.Int32;
+                                    break;
+                                case "SerializeInventory":
+                                    var serializeMethodBody = method.Body;
+                                    var serializeMethodIL = serializeMethodBody.GetILProcessor();
+
+                                    Instruction ldcInst = serializeMethodBody.Instructions.FirstOrDefault(i => i.OpCode == OpCodes.Ldc_I4
+                                    && i.Previous.OpCode == OpCodes.Br_S
+                                    && i.Next.OpCode == OpCodes.Callvirt);
+
+
+                                    break;
+                            }
+                        }
+                        break;
+                        // TODO: Review Pickup, PickupHandler patches
+                        // TODO: PlayerInventory, ItemInstanceData entry serializer, Every serializer and deserializer that uses IDs *shudders* (only if we want to touch base game item IDs), Player RPC_RequestCreatePickupVel | RequestCreatePickup, PlayerEmoteContentEvent?, PlayerEmotes?,
                 }
             }
 
