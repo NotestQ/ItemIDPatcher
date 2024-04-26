@@ -10,6 +10,7 @@ using Cecilifier.Runtime;
 using System.Data;
 using System.Reflection;
 using System.Net.Http;
+using BepInEx.Logging;
 
 namespace ItemIDPatcher
 {
@@ -17,6 +18,7 @@ namespace ItemIDPatcher
     {
         // List of assemblies to patch
         public static IEnumerable<string> TargetDLLs { get; } = new[] { "Assembly-CSharp.dll" };
+        public static ManualLogSource Logger { get; } = BepInEx.Logging.Logger.CreateLogSource("NotestDum");
         // Patches the assemblies
         public static void Patch(AssemblyDefinition assembly)
         {
@@ -78,7 +80,7 @@ namespace ItemIDPatcher
 
                         foreach (PropertyDefinition property in type.Properties)
                         {
-                            Console.WriteLine($"{property.Name} {property.FullName}");
+                            Logger.LogDebug($"{property.Name} {property.FullName}");
                             if (property.Name == "NumberOfItemsInShop")
                             {
                                 var getMethodIL = property.GetMethod.Body.GetILProcessor();
@@ -108,7 +110,7 @@ namespace ItemIDPatcher
                             {
                                 foreach (FieldDefinition field in nestedType.Fields)
                                 {
-                                    Console.WriteLine(field.Name);
+                                    Logger.LogDebug(field.Name);
                                     switch (field.Name) 
                                     {
                                         case "<>9__31_0":
@@ -171,7 +173,7 @@ namespace ItemIDPatcher
 
                                     if (callVirtInstruction.Operand is MethodReference methodRef)
                                     {
-                                        Console.WriteLine("Modifying the methodRef! (Notest dum dum)");
+                                        Logger.LogDebug("Modifying the methodRef! (Notest dum dum)");
                                         methodRef.DeclaringType = dictionaryTypeDef;
                                         callVirtInstruction.Operand = assembly.MainModule.ImportReference(methodRef);
                                     }
@@ -383,9 +385,16 @@ namespace ItemIDPatcher
                                     var serializeMethodBody = method.Body;
                                     var serializeMethodIL = serializeMethodBody.GetILProcessor();
 
-                                    Instruction ldcInst = serializeMethodBody.Instructions.FirstOrDefault(i => i.OpCode == OpCodes.Ldc_I4
+                                    var ldcInst = serializeMethodBody.Instructions.First(i => i.OpCode == OpCodes.Ldc_I4
                                     && i.Previous.OpCode == OpCodes.Br_S
                                     && i.Next.OpCode == OpCodes.Callvirt);
+
+                                    if (ldcInst.Next.Operand is MethodReference methodRef)
+                                    {
+                                        var writeInt = methodRef.DeclaringType.Resolve().Methods.First(m => m.Name == "WriteInt");
+                                        Logger.LogDebug("It work");
+                                        ldcInst.Next.Operand = assembly.MainModule.ImportReference(writeInt);
+                                    }
 
 
                                     break;
