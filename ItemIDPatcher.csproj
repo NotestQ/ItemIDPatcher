@@ -40,23 +40,16 @@
     </PropertyGroup>
 
     <!-- Primary Package References -->
+    <ItemGroup>
+        <PackageReference Include="BepInEx.Core" Version="5.4.21" PrivateAssets="all"/>
+    </ItemGroup>
 
     <ItemGroup Condition="'$(TargetFramework.TrimEnd(`0123456789`))' == 'net'">
         <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.2" PrivateAssets="all" />
     </ItemGroup>
-
-    <ItemGroup>
-      <Reference Include="BepInEx">
-        <HintPath>..\..\..\..\..\..\Program Files (x86)\Steam\steamapps\common\Content Warning\BepInEx\core\BepInEx.dll</HintPath>
-      </Reference>
-      <Reference Include="BepInEx.Preloader">
-        <HintPath>..\..\..\..\..\..\Program Files (x86)\Steam\steamapps\common\Content Warning\BepInEx\core\BepInEx.Preloader.dll</HintPath>
-      </Reference>
-      <Reference Include="Mono.Cecil">
-        <HintPath>..\..\..\..\..\..\Program Files (x86)\Steam\steamapps\common\Content Warning\BepInEx\core\Mono.Cecil.dll</HintPath>
-      </Reference>
-      <Reference Include="Mono.Cecil.Rocks">
-        <HintPath>..\..\..\..\..\..\Program Files (x86)\Steam\steamapps\common\Content Warning\BepInEx\core\Mono.Cecil.Rocks.dll</HintPath>
-      </Reference>
-    </ItemGroup>
+    
+    <!-- Copy output files -->
+    <Target Name="PostBuild" AfterTargets="Build" Condition="$(CI) != 'true' and '$(TargetFramework.TrimEnd(`0123456789`))' != 'net'">
+        <Exec ContinueOnError="true" Command="copy &quot;$(OutputPath)/$(AssemblyName).dll&quot; &quot;$(CW_GAMEFILES)BepInEx/patchers/&quot;" />
+    </Target>
 </Project>

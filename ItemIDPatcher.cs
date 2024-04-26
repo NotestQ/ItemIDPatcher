@@ -1,4 +1,3 @@
-using BepInEx.Preloader;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
 using Mono.Cecil.Rocks;
@@ -52,11 +51,7 @@ namespace ItemIDPatcher
                             if (property.Name == "ItemID")
                             {
                                 property.PropertyType = assembly.MainModule.TypeSystem.Int32;
-                                var propertyBody = property.GetMethod.Body;
-                                var propertyBodyILProcessor = propertyBody.GetILProcessor();
-
-                                propertyBodyILProcessor.InsertAfter(propertyBody.Instructions.Last(),
-                                    propertyBodyILProcessor.Create(OpCodes.Conv_I4));
+                                property.GetMethod.ReturnType = assembly.MainModule.TypeSystem.Int32;
                             }
                         }
                         break;
@@ -178,25 +173,17 @@ namespace ItemIDPatcher
                                     Console.WriteLine(callVirtInstruction.Operand);
                                     
                                     if (callVirtInstruction == null) break;
+                                    
+                                    var dictionaryType = assembly.MainModule.ImportReference(typeof(Dictionary<,>));
+                                    var dictionaryTypeDef = dictionaryType.Resolve().MakeGenericInstanceType(assembly.MainModule.TypeSystem.Int32, shopItemReference);
 
-                                    var dictionaryAddMethodReference = assembly.MainModule.ImportReference(
-                                        typeof(Dictionary<,>).GetMethods()
-                                        .FirstOrDefault(m => m.Name == "Add" && m.GetParameters().Length == 2));
-                                    var dictionaryAddMethodDefinition = dictionaryAddMethodReference.Resolve();
-
-                                    dictionaryAddMethodReference = new MethodReference(dictionaryAddMethodDefinition.Name, dictionaryAddMethodDefinition.ReturnType)
+                                    if (callVirtInstruction.Operand is MethodReference methodRef)
                                     {
-                                        HasThis = dictionaryAddMethodDefinition.HasThis,
-                                        ExplicitThis = dictionaryAddMethodDefinition.ExplicitThis,
-                                        DeclaringType = dictionaryTypeDefinition.MakeGenericInstanceType(assembly.MainModule.TypeSystem.Int32, shopItemReference),
-                                        CallingConvention = dictionaryAddMethodDefinition.CallingConvention
-                                    };
-                                    Console.WriteLine(methodILProcessor.Create(OpCodes.Callvirt, dictionaryAddMethodReference).Operand);
-
-                                    break;
-                                    // TODO: Invalid stack size decompilation error
-                                    methodILProcessor.Replace(callVirtInstruction,
-                                       methodILProcessor.Create(OpCodes.Callvirt, dictionaryAddMethodReference));
+                                        Console.WriteLine("Modifying the methodRef! (Notest dum dum)");
+                                        methodRef.DeclaringType = dictionaryTypeDef;
+                                        callVirtInstruction.Operand = assembly.MainModule.ImportReference(methodRef);
+                                    }
+                                    Console.WriteLine(callVirtInstruction.Operand);
                                     break;
                                 case "OnAddToCartItemClicked":
                                     method.Parameters[0].ParameterType = assembly.MainModule.TypeSystem.Int32;
