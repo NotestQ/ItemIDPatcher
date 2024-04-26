@@ -396,6 +396,8 @@ namespace ItemIDPatcher
                                         ldcInst.Next.Operand = assembly.MainModule.ImportReference(writeInt);
                                     }
 
+                                    ldcInst.Operand = int.MaxValue;
+
 
                                     break;
                             }
