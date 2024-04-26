@@ -28,8 +28,7 @@ namespace ItemIDPatcher
                 switch (type.Name)
                 {
                     case "ShopInteractibleItem": // [sic]
-                        // TODO: This converts to byte still, for some reason
-                        // I assume it's because *something* that uses it still expects a byte, blegh-
+
                         foreach (FieldDefinition field in type.Fields)
                         {
                             if (field.Name == "<ItemID>k__BackingField")
@@ -48,6 +47,8 @@ namespace ItemIDPatcher
                     case "ShopItem":
                         foreach (PropertyDefinition property in type.Properties)
                         {
+                            // TODO: This converts to byte still, for some reason
+                            // I assume it's because *something* that uses it still expects a byte, blegh-
                             if (property.Name == "ItemID")
                             {
                                 property.PropertyType = assembly.MainModule.TypeSystem.Int32;
