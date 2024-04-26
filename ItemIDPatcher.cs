@@ -46,8 +46,6 @@ namespace ItemIDPatcher
                     case "ShopItem":
                         foreach (PropertyDefinition property in type.Properties)
                         {
-                            // TODO: This converts to byte still, for some reason
-                            // I assume it's because *something* that uses it still expects a byte, blegh-
                             if (property.Name == "ItemID")
                             {
                                 property.PropertyType = assembly.MainModule.TypeSystem.Int32;
@@ -104,11 +102,10 @@ namespace ItemIDPatcher
                             }
                         }
 
-                        /*foreach (var nestedType in type.NestedTypes) Commented out for the time being because I hope the issue goes away by itself
+                        foreach (var nestedType in type.NestedTypes) // Commented out for the time being because I hope the issue goes away by itself (*It won't*)
                         {
                             if (nestedType.Name == "<>c")
                             {
-                                // TODO: Change method b__41_0, b__31_0 return type (and instructions, maybe?)
                                 foreach (FieldDefinition field in nestedType.Fields)
                                 {
                                     Console.WriteLine(field.Name);
@@ -116,29 +113,24 @@ namespace ItemIDPatcher
                                     {
                                         case "<>9__31_0":
                                         case "<>9__41_0":
-                                            field.FieldType = assembly.MainModule.ImportReference(typeof(System.Func<,>)).MakeGenericInstanceType(assembly.MainModule.TypeSystem.Int32, shopItemDefintion);
+                                            field.FieldType = assembly.MainModule.ImportReference(typeof(System.Func<,>))
+                                                .MakeGenericInstanceType(assembly.MainModule.TypeSystem.Int32, shopItemDefintion);
                                             break;
                                     }
                                 }
 
                                 foreach (MethodDefinition method in nestedType.Methods)
                                 {
-                                    Console.WriteLine(method.Name);
                                     switch (method.Name)
                                     {
                                         case "<RPCM_RequestShop>b__31_0": 
                                         case "<BuyItem>b__41_0":
-                                            
-                                            /*foreach (Instruction instr in method.Body.Instructions) // call System.Byte ShopItem::get_ItemID(); ret
-                                            {
-                                                Console.WriteLine($"{instr.OpCode} {instr.Operand}");
-                                            }
                                             method.ReturnType = assembly.MainModule.TypeSystem.Int32;
                                             break;
                                     }
                                 }
                             }
-                        }*/
+                        }
 
                         foreach (MethodDefinition method in type.Methods)
                         {
@@ -230,7 +222,6 @@ namespace ItemIDPatcher
                                         requestShopILProcessor.Replace(requestShopToArrayCallInstruction,
                                                 requestShopILProcessor.Create(OpCodes.Call, toArrayMethodGenericInstance));
                                     }
-                                    // TODO?: Change stfld and stuff still using uint8?
                                     break;
                                 case "RPCO_UpdateShop":
                                     method.Parameters[1].ParameterType = assembly.MainModule.TypeSystem.Int32.MakeArrayType();
@@ -312,7 +303,7 @@ namespace ItemIDPatcher
                                             buyItemILProcessor.Replace(toArrayCallInstruction,
                                                     buyItemILProcessor.Create(OpCodes.Call, toArrayMethodGenericInstance));
                                         }
-                                        // TODO?: Change line 37 stsfld, 35 newobj, 29 ldsfld ??
+                                        // TODO?: Change line 35 newobj
                                         break;
                                     }
 
