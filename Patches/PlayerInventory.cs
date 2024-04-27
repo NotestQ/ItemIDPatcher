@@ -11,6 +11,15 @@ internal class PlayerInventory : IDPatch {
         {
             switch (method.Name)
             {
+                case "SyncAddToSlot":
+                    var syncMethodBody = method.Body;
+
+                    var instr = syncMethodBody.Instructions.First(i => i.OpCode == OpCodes.Box
+                                                                       && i.Previous.OpCode == OpCodes.Ldfld
+                                                                       && i.Previous.Previous.OpCode == OpCodes.Ldfld);
+
+                    instr.Operand = typeDefinition.Module.TypeSystem.Int32;
+                    break;
                 case "RPC_AddToSlot":
                     method.Parameters[1].ParameterType = typeDefinition.Module.TypeSystem.Int32;
                     break;
@@ -24,7 +33,6 @@ internal class PlayerInventory : IDPatch {
                     if (ldcInst.Next.Operand is MethodReference methodRef)
                     {
                         var writeInt = methodRef.DeclaringType.Resolve().Methods.First(m => m.Name == "WriteInt");
-                        EntrypointPatcher.Logger.LogDebug("It work");
                         ldcInst.Next.Operand = typeDefinition.Module.ImportReference(writeInt);
                     }
 
@@ -54,7 +62,6 @@ internal class PlayerInventory : IDPatch {
                     if (callVirtInstr.Operand is MethodReference callVirtMethodRef)
                     {
                         var readInt = callVirtMethodRef.DeclaringType.Resolve().Methods.First(m => m.Name == "ReadInt");
-                        EntrypointPatcher.Logger.LogDebug("It work2");
                         callVirtInstr.Operand = typeDefinition.Module.ImportReference(readInt);
                     }
 

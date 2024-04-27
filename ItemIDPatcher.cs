@@ -17,7 +17,7 @@ internal static class EntrypointPatcher
     // List of assemblies to patch
     [UsedImplicitly]
     public static IEnumerable<string> TargetDLLs { get; } = new[] { "Assembly-CSharp.dll" };
-    internal static ManualLogSource Logger { get; } = BepInEx.Logging.Logger.CreateLogSource("NotestDumb");
+    internal static ManualLogSource Logger { get; } = BepInEx.Logging.Logger.CreateLogSource("ItemIDPatcher");
     private static Dictionary<string, Actionable> IDPatches { get; } = new ();
 
     private delegate void Actionable(TypeDefinition memberDefinition);
@@ -42,8 +42,7 @@ internal static class EntrypointPatcher
             if (IDPatches.TryGetValue(type.Name, out var actionable))
                 actionable(type);
 
-            // TODO: Review Pickup, PickupHandler, PlayerInventory, ItemInstanceData, ArtifactContentEvent, EmoteItem patches
-            // TODO: PlayerEmotes, PlayerEmoteContentEvent, Every serializer and deserializer that uses IDs *shudders* (only if we want to touch base game item IDs), Player RPC_RequestCreatePickupVel | RequestCreatePickup
+            // TODO: Review ShopHandler, Pickup, PickupHandler, PlayerInventory, ItemInstanceData, ArtifactContentEvent, EmoteItem, PlayerEmotes, PlayerEmoteContentEvent, Player patches
         }
 
         if (!Directory.Exists(Paths.CachePath)) Directory.CreateDirectory(Paths.CachePath);

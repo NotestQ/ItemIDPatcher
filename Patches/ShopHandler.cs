@@ -22,7 +22,6 @@ internal class ShopHandler : IDPatch {
 
         foreach (var property in typeDefinition.Properties)
         {
-            EntrypointPatcher.Logger.LogDebug($"{property.Name} {property.FullName}");
             if (property.Name != "NumberOfItemsInShop") continue;
             
             var getMethodIL = property.GetMethod.Body.GetILProcessor();
@@ -49,7 +48,6 @@ internal class ShopHandler : IDPatch {
         {
             foreach (var field in nestedType.Fields)
             {
-                EntrypointPatcher.Logger.LogDebug(field.Name);
                 field.FieldType = field.Name switch {
                     "<>9__31_0" or "<>9__41_0" => typeDefinition.Module.ImportReference(typeof(Func<,>)).MakeGenericInstanceType(typeDefinition.Module.TypeSystem.Int32, shopItemDefinition),
                     _ => field.FieldType
@@ -102,14 +100,22 @@ internal class ShopHandler : IDPatch {
 
                     if (callVirtInstruction.Operand is MethodReference methodRef)
                     {
-                        EntrypointPatcher.Logger.LogDebug("Modifying the methodRef! (Notest dum dum)");
                         methodRef.DeclaringType = dictionaryTypeDef;
                         callVirtInstruction.Operand = typeDefinition.Module.ImportReference(methodRef);
                     }
-                    Console.WriteLine(callVirtInstruction.Operand);
+
                     break;
                 case "OnAddToCartItemClicked":
                     method.Parameters[0].ParameterType = typeDefinition.Module.TypeSystem.Int32;
+                    var onAddToCartMethodBody = method.Body;
+
+                    var firstBoxInstr = onAddToCartMethodBody.Instructions.First(i => i.OpCode == OpCodes.Box
+                                                                            && i.Previous.OpCode == OpCodes.Ldarg_1);
+                    var lastBoxInstr = onAddToCartMethodBody.Instructions.Last(i => i.OpCode == OpCodes.Box
+                        && i.Previous.OpCode == OpCodes.Ldarg_1);
+
+                    firstBoxInstr.Operand = typeDefinition.Module.TypeSystem.Int32;
+                    lastBoxInstr.Operand = typeDefinition.Module.TypeSystem.Int32;
                     break;
                 case "RPCM_RequestShop":
                     var requestShopBody = method.Body;
@@ -165,22 +171,30 @@ internal class ShopHandler : IDPatch {
                     break;
                 case "RPCA_AddItemToCart":
                     method.Parameters[0].ParameterType = typeDefinition.Module.TypeSystem.Int32;
-
-                    /*var addToCartBody = method.Body;
-                    var addToCartILProcessor = addToCartBody.GetILProcessor();
-
-                    foreach (Instruction instr in addToCartBody.Instructions)
-                    {
-                        Console.WriteLine(instr.OpCode);
-                        //addToCartILProcessor.Replace(instr,
-                         //   addToCartILProcessor.Create(OpCodes.Box, typeDefinition.Module.TypeSystem.Int32));
-                    }*/
                     break;
                 case "RPCM_RequestShopAction":
                     method.Parameters[1].ParameterType = typeDefinition.Module.TypeSystem.Int32;
                     break;
+                case "OnChangeCategoryClicked":
+                    var onChangeCategoryMethodBody = method.Body;
+
+                    var lastChangeBoxInstr = onChangeCategoryMethodBody.Instructions.Last(i => i.OpCode == OpCodes.Box
+                        && i.Previous.OpCode == OpCodes.Ldarg_1);
+
+                    lastChangeBoxInstr.Operand = typeDefinition.Module.TypeSystem.Int32;
+                    break;
                 case "TryGetShopItem":
                     method.Parameters[0].ParameterType = typeDefinition.Module.TypeSystem.Int32;
+                    var tryGetShopMethodBody = method.Body;
+                    foreach (var callVirtInstr in tryGetShopMethodBody.Instructions.Where(i => i.OpCode == OpCodes.Callvirt))
+                    {
+                        var dictTypeDefinition = typeDefinition.Module.ImportReference(typeof(Dictionary<,>));
+                        if (callVirtInstr.Operand is MethodReference funcMethodRef)
+                        {
+                            funcMethodRef.DeclaringType = dictTypeDefinition.MakeGenericInstanceType(typeDefinition.Module.TypeSystem.Int32,
+                                shopItemReference);
+                        }
+                    }
                     break;
                 case "BuyItem":
                     if (method.Parameters.Count == 1) // Overload where the only parameter is ShoppingCart cart
