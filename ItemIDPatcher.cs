@@ -41,9 +41,9 @@ internal static class EntrypointPatcher
         {
             if (IDPatches.TryGetValue(type.Name, out var actionable))
                 actionable(type);
-             
-            // TODO: Review Pickup, PickupHandler patches
-            // TODO: PlayerInventory, ItemInstanceData entry serializer, Every serializer and deserializer that uses IDs *shudders* (only if we want to touch base game item IDs), Player RPC_RequestCreatePickupVel | RequestCreatePickup, PlayerEmoteContentEvent?, PlayerEmotes?,
+
+            // TODO: Review Pickup, PickupHandler, PlayerInventory, ItemInstanceData, ArtifactContentEvent, EmoteItem patches
+            // TODO: PlayerEmotes, PlayerEmoteContentEvent, Every serializer and deserializer that uses IDs *shudders* (only if we want to touch base game item IDs), Player RPC_RequestCreatePickupVel | RequestCreatePickup
         }
 
         if (!Directory.Exists(Paths.CachePath)) Directory.CreateDirectory(Paths.CachePath);

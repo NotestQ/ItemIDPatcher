@@ -8,8 +8,12 @@ internal class ShopInteractibleItem : IDPatch {
     {
         foreach (var field in typeDefinition.Fields.Where(field => field.Name == "<ItemID>k__BackingField"))
             field.FieldType = typeDefinition.Module.TypeSystem.Int32;
-            
+        
         foreach (var property in typeDefinition.Properties.Where(property => property.Name == "ItemID"))
+        {
             property.PropertyType = typeDefinition.Module.TypeSystem.Int32;
+            property.GetMethod.ReturnType = typeDefinition.Module.TypeSystem.Int32;
+            property.SetMethod.Parameters[0].ParameterType = typeDefinition.Module.TypeSystem.Int32;
+        }
     }
 }

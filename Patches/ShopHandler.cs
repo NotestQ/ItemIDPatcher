@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using BepInEx.Logging;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
 using Mono.Cecil.Rocks;
@@ -125,7 +126,7 @@ internal class ShopHandler : IDPatch {
                                                                                                    && i.Next.Next.OpCode == OpCodes.Call).Next;
                     var requestShopToArrayCallInstruction = requestShopSelectCallInstruction.Next;
 
-                {
+                    {
                     var selectMethodReference = typeDefinition.Module.ImportReference(
                         typeof(Enumerable).GetMethods()
                             .Where(m => m.Name == "Select")
@@ -137,7 +138,7 @@ internal class ShopHandler : IDPatch {
 
                     requestShopILProcessor.Replace(requestShopSelectCallInstruction,
                         requestShopILProcessor.Create(OpCodes.Call, selectMethodGenericInstance));
-                }
+                    }
 
                     if (requestShopToArrayCallInstruction != null)
                     {
@@ -187,19 +188,14 @@ internal class ShopHandler : IDPatch {
                         var buyItemBody = method.Body;
                         var buyItemILProcessor = buyItemBody.GetILProcessor();
 
-                        buyItemBody.Variables[1].VariableType = typeDefinition.Module.TypeSystem.Int32.MakeArrayType(); // stloc 1
+                        buyItemBody.Variables[1].VariableType = typeDefinition.Module.TypeSystem.Int32.MakeArrayType();
                         //Patch line 38 and 39 call
-                        /*string selectOperand = "System.Collections.Generic.IEnumerable`1 < !!1 > System.Linq.Enumerable::Select<ShopItem, System.Byte>(System.Collections.Generic.IEnumerable`1 < !!0 >, System.Func`2 < !!0, !!1 >)";
-                        string toArrayOperand = "!!0[] System.Linq.Enumerable::ToArray<System.Byte>(System.Collections.Generic.IEnumerable`1 < !!0 >)";*/
-                        var selectCallInstruction = buyItemBody.Instructions.First(i => //&& i.Operand != null 
+                       
+                        var selectCallInstruction = buyItemBody.Instructions.First(i =>
                             i.OpCode == OpCodes.Call
-                            //&& i.Operand.ToString() == selectOperand);
                             && i.Previous.OpCode == OpCodes.Stsfld
                             && i.Next.OpCode == OpCodes.Call);
-                        /*var toArrayCallInstruction = buyItemBody.Instructions.FirstOrDefault(i => i.OpCode != null
-                        && i.Operand != null
-                        && i.OpCode == OpCodes.Call
-                        && i.Operand.ToString() == toArrayOperand);*/
+
                         var toArrayCallInstruction = selectCallInstruction.Next;
 
                         {
@@ -223,11 +219,27 @@ internal class ShopHandler : IDPatch {
                                     .FirstOrDefault(m => m.Name == "ToArray"));
                             var toArrayMethodGenericInstance = new GenericInstanceMethod(toArrayMethodReference);
                             toArrayMethodGenericInstance.GenericArguments.Add(typeDefinition.Module.TypeSystem.Int32);
-                            //var newToArrayCall = typeDefinition.Module.ImportReference(TypeHelpers.ResolveGenericMethodInstance(typeof(System.Linq.Enumerable).AssemblyQualifiedName, "ToArray", System.Reflection.BindingFlags.Default | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public, new ParamData[] { }, new[] { typeof(System.Int32).AssemblyQualifiedName }));
+                            
                             buyItemILProcessor.Replace(toArrayCallInstruction,
                                 buyItemILProcessor.Create(OpCodes.Call, toArrayMethodGenericInstance));
                         }
-                        // TODO?: Change line 35 newobj
+
+                        // Change line 35 newobj
+
+                        var funcTypeDefinition = typeDefinition.Module.ImportReference(typeof(Func<,>));
+                        
+                        var newObjFuncInstruction = buyItemBody.Instructions.First(t => t.OpCode == OpCodes.Newobj 
+                            && t.Previous.OpCode == OpCodes.Ldftn
+                            && t.Next.OpCode == OpCodes.Dup);
+
+                        if (newObjFuncInstruction == null) break;
+
+                        if (newObjFuncInstruction.Operand is MethodReference funcMethodRef)
+                        {
+                            funcMethodRef.DeclaringType = funcTypeDefinition.MakeGenericInstanceType(shopItemReference,
+                                typeDefinition.Module.TypeSystem.Int32);
+                        }
+
                         break;
                     }
 

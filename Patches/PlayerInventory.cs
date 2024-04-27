@@ -32,6 +32,35 @@ internal class PlayerInventory : IDPatch {
 
 
                     break;
+                case "UpdateInventory":
+                    var updateMethodBody = method.Body;
+                    foreach (var variable in updateMethodBody.Variables)
+                    {
+                        switch (variable.Index)
+                        {
+                            case 4:
+                                variable.VariableType = typeDefinition.Module.TypeSystem.Int32;
+                                break;
+                        }
+                    }
+                        
+                    var callVirtInstr = updateMethodBody.Instructions.First(i => i.OpCode == OpCodes.Callvirt
+                                                                           && i.Previous.OpCode == OpCodes.Ldloc_0
+                                                                           && i.Next.OpCode == OpCodes.Stloc_S);
+                    var ldci4Instr = updateMethodBody.Instructions.First(i => i.OpCode == OpCodes.Ldc_I4
+                                                                              && i.Previous.OpCode == OpCodes.Ldloc_S
+                                                                              && i.Next.OpCode == OpCodes.Bge_S);
+
+                    if (callVirtInstr.Operand is MethodReference callVirtMethodRef)
+                    {
+                        var readInt = callVirtMethodRef.DeclaringType.Resolve().Methods.First(m => m.Name == "ReadInt");
+                        EntrypointPatcher.Logger.LogDebug("It work2");
+                        callVirtInstr.Operand = typeDefinition.Module.ImportReference(readInt);
+                    }
+
+                    ldci4Instr.Operand = int.MaxValue;
+
+                    break;
             }
         }
     }
