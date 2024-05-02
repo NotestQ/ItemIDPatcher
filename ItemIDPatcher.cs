@@ -42,7 +42,7 @@ internal static class EntrypointPatcher
             if (IDPatches.TryGetValue(type.Name, out var actionable))
                 actionable(type);
 
-            // TODO: Review ShopHandler, Pickup, PickupHandler, PlayerInventory, ItemInstanceData, ArtifactContentEvent, EmoteItem, PlayerEmotes, PlayerEmoteContentEvent, Player patches
+            // TODO: Review ShopHandler, BombContentEvent, ItemInstanceData, Pickup, PickupHandler, PlayerInventory, ItemInstanceData, ArtifactContentEvent, EmoteItem, PlayerEmotes, PlayerEmoteContentEvent, Player patches
         }
 
         if (!Directory.Exists(Paths.CachePath)) Directory.CreateDirectory(Paths.CachePath);

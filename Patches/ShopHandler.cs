@@ -49,7 +49,7 @@ internal class ShopHandler : IDPatch {
             foreach (var field in nestedType.Fields)
             {
                 field.FieldType = field.Name switch {
-                    "<>9__31_0" or "<>9__41_0" => typeDefinition.Module.ImportReference(typeof(Func<,>)).MakeGenericInstanceType(typeDefinition.Module.TypeSystem.Int32, shopItemDefinition),
+                    "<>9__32_0" or "<>9__42_0" => typeDefinition.Module.ImportReference(typeof(Func<,>)).MakeGenericInstanceType(shopItemDefinition, typeDefinition.Module.TypeSystem.Int32),
                     _ => field.FieldType
                 };
             }
@@ -57,7 +57,7 @@ internal class ShopHandler : IDPatch {
             foreach (var method in nestedType.Methods)
             {
                 method.ReturnType = method.Name switch {
-                    "<RPCM_RequestShop>b__31_0" or "<BuyItem>b__41_0" => typeDefinition.Module.TypeSystem.Int32,
+                    "<RPCM_RequestShop>b__32_0" or "<BuyItem>b__42_0" => typeDefinition.Module.TypeSystem.Int32,
                     _ => method.ReturnType
                 };
             }
