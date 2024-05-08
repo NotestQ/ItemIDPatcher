@@ -27,7 +27,6 @@ internal static class EntrypointPatcher
     {
         foreach (var definedType in Assembly.GetExecutingAssembly().DefinedTypes.Where(type => typeof(IDPatch).IsAssignableFrom(type) && type.FullName != typeof(IDPatch).FullName))
         {
-                
             var PatchMethod = definedType.DeclaredMethods.First(method => method.Name == "Patch");
             IDPatches.Add(definedType.Name, (Actionable)PatchMethod.CreateDelegate(typeof(Actionable)));
         }
