@@ -258,9 +258,20 @@ internal class ShopHandler : IDPatch {
                     }
 
                     method.Parameters[1].ParameterType = typeDefinition.Module.TypeSystem.Int32.MakeArrayType();
+                    var buyItemBody2 = method.Body;
+                    var buyItemILProcessor2 = buyItemBody2.GetILProcessor();
+                    var opCode = buyItemBody2.Instructions.First(t => t.OpCode == OpCodes.Ldelem_U1);
+                    opCode.OpCode = OpCodes.Ldelem_I4; // TODO: Change every Ldelem_U1 in every use of trygetshopitem to Ldelem_I4
+
+                    // Latter doesn't change anything, gwah-
+                    method.Body.Variables[0].VariableType = typeDefinition.Module.TypeSystem.Int32.MakeArrayType();
                     break;
                 case "RPCA_SpawnDrone":
                     method.Parameters[0].ParameterType = typeDefinition.Module.TypeSystem.Int32.MakeArrayType();
+                    var spawnDroneMethodBody = method.Body;
+                    var spawnDroneILProcessor = spawnDroneMethodBody.GetILProcessor();
+                    var spawnOpCode = spawnDroneMethodBody.Instructions.First(t => t.OpCode == OpCodes.Ldelem_U1);
+                    spawnOpCode.OpCode = OpCodes.Ldelem_I4;
                     break;
             }
         }
